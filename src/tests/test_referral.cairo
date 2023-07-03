@@ -5,12 +5,13 @@ use debug::PrintTrait;
 use starknet::testing;
 use starknet::ContractAddress;
 
-use referral::referral::{Referral};
+use referral::referral::{Referral, IReferralDispatcher, IReferralDispatcherTrait};
 
 use super::constants::{OWNER, ZERO, OTHER, USER, REFERRAL_ADDR};
 use super::utils;
 use super::mocks::erc20::{ ERC20, IERC20Dispatcher, IERC20DispatcherTrait };
 use super::mocks::naming::{ Naming, INamingDispatcher, INamingDispatcherTrait };
+use super::mocks::referral_v2::{ Referral_V2, IReferral_V2Dispatcher, IReferral_V2DispatcherTrait };
 
 // 
 // SETUP
@@ -39,6 +40,32 @@ fn deploy_erc20(recipient: ContractAddress, initial_supply: u256) -> IERC20Dispa
 fn deploy_naming() -> INamingDispatcher {
   let address = utils::deploy(Naming::TEST_CLASS_HASH, ArrayTrait::<felt252>::new());
   INamingDispatcher { contract_address: address }
+}
+
+fn deploy_referral(
+    admin: ContractAddress, 
+    naming_addr: ContractAddress,
+    eth_addr: ContractAddress,
+    min_claim_amount: u256, 
+    share: u256
+) -> IReferralDispatcher {
+  let mut calldata = ArrayTrait::<felt252>::new();
+
+  calldata.append(admin.into());
+  calldata.append(naming_addr.into());
+  calldata.append(eth_addr.into());
+  calldata.append(min_claim_amount.low.into());
+  calldata.append(min_claim_amount.high.into());
+  calldata.append(share.low.into());
+  calldata.append(share.high.into());
+
+  let address = utils::deploy(Referral::TEST_CLASS_HASH, calldata);
+  IReferralDispatcher { contract_address: address }
+}
+
+
+fn V2_CLASS_HASH() -> starknet::class_hash::ClassHash {
+    Referral_V2::TEST_CLASS_HASH.try_into().unwrap()
 }
 
 
@@ -347,4 +374,29 @@ fn test_claim_fail_contract_balance_too_low() {
     // It should test claiming the commission with an amount higher than the balance of the referral contract
     testing::set_caller_address(OTHER());
     Referral::claim(u256 { low: 100, high: 0 });
+}
+
+#[test]
+#[available_gas(20000000)]
+#[should_panic(expected: ('Caller is not the owner',))]
+fn test_upgrade_unauthorized() {
+    let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
+    let naming = deploy_naming();
+    setup(naming.contract_address, erc20.contract_address, u256  { low: 1, high: 0 }, share:  u256 { low: 10, high: 0 });
+
+    // It should test upgrading implementation from a non-admin account
+    testing::set_caller_address(OTHER());
+    Referral::upgrade(V2_CLASS_HASH());
+}
+
+#[test]
+#[available_gas(20000000)]
+#[should_panic(expected: ('Caller is the zero address',))]
+fn test_upgrade_fail_from_zero() {
+    let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
+    let naming = deploy_naming();
+    setup(naming.contract_address, erc20.contract_address, u256  { low: 1, high: 0 }, share:  u256 { low: 10, high: 0 });
+
+    // It should test upgrading implementation from the zero address
+    Referral::upgrade(V2_CLASS_HASH());
 }

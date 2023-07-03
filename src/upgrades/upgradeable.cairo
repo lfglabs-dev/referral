@@ -15,6 +15,8 @@ mod Upgradeable {
     use starknet::get_contract_address;
     use zeroable::Zeroable;
 
+    use referral::access::ownable::Ownable;
+
     #[event]
     fn Upgraded(implementation: ClassHash) {}
 
@@ -44,6 +46,7 @@ mod Upgradeable {
 
     #[internal]
     fn _upgrade(impl_hash: ClassHash) {
+        Ownable::assert_only_owner();
         assert(!impl_hash.is_zero(), 'Class hash cannot be zero');
         starknet::replace_class_syscall(impl_hash).unwrap_syscall();
         Upgraded(impl_hash);

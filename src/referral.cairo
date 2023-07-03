@@ -10,18 +10,22 @@ trait IReferral {
     fn add_commission(amount: u256, sponsor_addr: starknet::ContractAddress);
     #[external]
     fn withdraw(addr: starknet::ContractAddress, amount: u256);
+    #[external]
+    fn upgrade(impl_hash: starknet::class_hash::ClassHash);
+    #[external]
+    fn upgrade_and_call(new_hash: starknet::class_hash::ClassHash, selector: felt252, calldata: Array<felt252>);
 }
 
 #[contract]
 mod Referral {
     use starknet::ContractAddress;
+    use starknet::class_hash::ClassHash;
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
 
     use debug::PrintTrait;
 
     use referral::access::ownable::Ownable;
-
-    use integer::u128_safe_divmod;
+    use referral::upgrades::upgradeable::Upgradeable;
 
     // dispatchers
     use referral::token::erc20::{ IERC20Dispatcher, IERC20DispatcherTrait };
@@ -170,6 +174,18 @@ mod Referral {
     #[external]
     fn transfer_ownership(new_admin: ContractAddress) {
         Ownable::transfer_ownership(new_admin);
+    }
+
+    #[external]
+    fn upgrade(impl_hash: ClassHash) {
+        Ownable::assert_only_owner();
+        Upgradeable::upgrade(impl_hash);
+    }
+
+    #[external]
+    fn upgrade_and_call(impl_hash: ClassHash, selector: felt252, calldata: Array<felt252>) {
+        Ownable::assert_only_owner();
+        Upgradeable::upgrade_and_call(impl_hash, selector, calldata);
     }
 
     //
