@@ -31,8 +31,8 @@ mod Referral {
     use referral::token::erc20::{ IERC20Dispatcher, IERC20DispatcherTrait };
 
     struct Storage {
-        sponsor_balance: LegacyMap::<ContractAddress, u256>, // sponsor_addr -> amount
-        sponsor_comm: LegacyMap::<ContractAddress, u256>, // sponsor_addr -> share
+        sponsor_balance: LegacyMap::<ContractAddress, u256>,
+        sponsor_comm: LegacyMap::<ContractAddress, u256>,
         default_comm: u256,
         min_claim: u256,
         naming_contract: ContractAddress,
