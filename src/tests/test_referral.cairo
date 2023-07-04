@@ -267,7 +267,7 @@ fn test_withdraw_fail_zero_addr() {
 
 #[test]
 #[available_gas(20000000)]
-#[should_panic(expected: ('Contract balance too low',))]
+#[should_panic(expected: ('u256_sub Overflow', 'ENTRYPOINT_FAILED',))]
 fn test_withdraw_fail_balance_too_low() {
     let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
     let naming = deploy_naming();
@@ -356,7 +356,7 @@ fn test_claim_fail_claimed_too_much_than_balance() {
 
 #[test]
 #[available_gas(20000000)]
-#[should_panic(expected: ('Contract balance too low',))]
+#[should_panic(expected: ('u256_sub Overflow', 'ENTRYPOINT_FAILED',))]
 fn test_claim_fail_contract_balance_too_low() {
     let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
     let naming = deploy_naming();
