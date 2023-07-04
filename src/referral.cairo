@@ -114,6 +114,7 @@ mod Referral {
         // };
 
         // todo: update to use u256_safe_divmod when we can
+        // warning: make sure to check for overflow
         let comm = (amount.low * share.low) / 100_u128;
 
         sponsor_balance::write(sponsor_addr, sponsor_balance::read(sponsor_addr) + u256 { low: comm, high: 0 });
