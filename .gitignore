@@ -1,1 +1,9 @@
 target
+.env
+.DS_Store
+
+# Python
+__pycache__
+venv
+
+deployments
