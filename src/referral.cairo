@@ -91,6 +91,7 @@ mod Referral {
 
         let contract_addr = get_contract_address();
         let ERC20 = IERC20Dispatcher { contract_address: eth_contract::read() };
+        ERC20.approve(spender: contract_addr, amount: amount);
         ERC20.transferFrom(sender: contract_addr, recipient: sponsor_addr, amount: amount);
         sponsor_balance::write(sponsor_addr, balance - amount);
 
@@ -151,6 +152,7 @@ mod Referral {
         Ownable::assert_only_owner();
         let contract_addr = get_contract_address();
         let ERC20 = IERC20Dispatcher { contract_address: eth_contract::read() };
+        ERC20.approve(spender: contract_addr, amount: amount);
         ERC20.transferFrom(sender: contract_addr, recipient: addr, amount: amount);
     }
 
