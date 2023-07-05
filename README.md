@@ -28,10 +28,7 @@ docker run -p 5050:5050 shardlabs/starknet-devnet:0.5.4 --disable-rpc-request-va
 
 ### Run Scripts
 
-You can now run your scripts in the script directory to declare, deploy and initialize contracts. Check `.env.example` file for env variables.
-The script `deploy_devnet.py` will create create data to test indexer and endpoints.
-
-Scripts work with version `0.17.0-alpha` of starknet.py.
+Scripts to declare, deploy and initialize contracts require version `0.17.0-alpha` of starknet.py.
 
 ## Indexing Contracts on Devnet using DNA
 
@@ -44,11 +41,3 @@ From your DNA repo, run this command to run DNA locally:
 ```
 OTEL_SDK_DISABLED=true RUST_LOG=info cargo run --release -p apibara-starknet -- start --devnet --rpc http://localhost:5050/rpc --wait-for-rpc
 ```
-
-In your indexer repo, specify :
-
-```
-
-```
-
-Then you should be good to go !
