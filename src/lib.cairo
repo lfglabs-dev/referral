@@ -1,2 +1,6 @@
-mod business_logic;
-mod contract;
+mod referral;
+mod token;
+mod access;
+mod upgrades;
+
+mod tests;
