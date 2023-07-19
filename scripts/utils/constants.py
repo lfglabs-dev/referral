@@ -13,7 +13,7 @@ load_dotenv()
 
 NETWORKS = {
     "mainnet": {
-        "name": "testnet",
+        "name": "mainnet",
         "feeder_gateway_url": "https://alpha-mainnet.starknet.io/feeder_gateway",
         "gateway_url": "https://alpha-mainnet.starknet.io/gateway",
     },
@@ -74,5 +74,7 @@ DEPLOYMENTS_DIR.mkdir(exist_ok=True, parents=True)
 
 COMPILED_CONTRACTS = [
     {"contract_name": "referral_Referral", "is_account_contract": False},
-    {"contract_name": "referral_Naming", "is_account_contract": False},
+    # {"contract_name": "referral_Naming", "is_account_contract": False}, // uncomment to test on devnet
 ]
+
+NAMING_ADDRESS = 0x6ac597f8116f886fa1c97a23fa4e08299975ecaf6b598873ca6792b9bbfb678
