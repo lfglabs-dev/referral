@@ -304,54 +304,10 @@ fn test_claim() {
 
     // It should test claiming the commission
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 100, high: 0 });
+    Referral::claim();
     let balance = Referral::get_balance(OTHER());
     assert(balance == u256 { low: 0, high: 0 }, 'Claiming commissions failed');
 
-}
-
-#[test]
-#[available_gas(20000000)]
-#[should_panic(expected: ('Amount is too low',))]
-fn test_claim_fail_min_claim_amount() {
-    let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
-    let naming = deploy_naming();
-    let default_comm = u256 { low: 10, high: 0 };
-    let price_domain = u256 { low: 1000, high: 0 };
-
-    testing::set_caller_address(OWNER());
-    testing::set_contract_address(REFERRAL_ADDR());
-    setup(naming.contract_address, erc20.contract_address, u256  { low: 100, high: 0 }, share:  default_comm);
-    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 1000, high: 0 });
-
-    testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
-
-    // It should test claiming the commission with an amount lower than the min claim amount
-    testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 50, high: 0 });
-}
-
-#[test]
-#[available_gas(20000000)]
-#[should_panic(expected: ('Amount greater than balance',))]
-fn test_claim_fail_claimed_too_much_than_balance() {
-    let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: u256 { low: 100000, high: 0 });
-    let naming = deploy_naming();
-    let default_comm = u256 { low: 10, high: 0 };
-    let price_domain = u256 { low: 1000, high: 0 };
-
-    testing::set_caller_address(OWNER());
-    testing::set_contract_address(REFERRAL_ADDR());
-    setup(naming.contract_address, erc20.contract_address, u256  { low: 100, high: 0 }, share:  default_comm);
-    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 1000, high: 0 });
-
-    testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
-
-    // It should test claiming the commission with an amount higher than the balance of the user
-    testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 2000, high: 0 });
 }
 
 #[test]
@@ -373,7 +329,7 @@ fn test_claim_fail_contract_balance_too_low() {
 
     // It should test claiming the commission with an amount higher than the balance of the referral contract
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 100, high: 0 });
+    Referral::claim();
 }
 
 #[test]
