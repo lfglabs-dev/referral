@@ -304,7 +304,7 @@ fn test_claim() {
 
     // It should test claiming the commission
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 100, high: 0 });
+    Referral::claim();
     let balance = Referral::get_balance(OTHER());
     assert(balance == u256 { low: 0, high: 0 }, 'Claiming commissions failed');
 
@@ -329,7 +329,7 @@ fn test_claim_fail_min_claim_amount() {
 
     // It should test claiming the commission with an amount lower than the min claim amount
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 50, high: 0 });
+    Referral::claim();
 }
 
 #[test]
@@ -351,7 +351,7 @@ fn test_claim_fail_claimed_too_much_than_balance() {
 
     // It should test claiming the commission with an amount higher than the balance of the user
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 2000, high: 0 });
+    Referral::claim();
 }
 
 #[test]
@@ -373,7 +373,7 @@ fn test_claim_fail_contract_balance_too_low() {
 
     // It should test claiming the commission with an amount higher than the balance of the referral contract
     testing::set_caller_address(OTHER());
-    Referral::claim(u256 { low: 100, high: 0 });
+    Referral::claim();
 }
 
 #[test]

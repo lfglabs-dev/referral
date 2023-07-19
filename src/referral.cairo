@@ -88,9 +88,9 @@ mod Referral {
 
     #[external]
     fn claim() {
+        let sponsor_addr = get_caller_address();
         let balance = sponsor_balance::read(sponsor_addr);
         assert(balance >= min_claim::read(), 'Balance is too low');
-        let sponsor_addr = get_caller_address();
         let contract_addr = get_contract_address();
         let ERC20 = IERC20Dispatcher { contract_address: eth_contract::read() };
         ERC20.transfer(recipient: sponsor_addr, amount: balance);
