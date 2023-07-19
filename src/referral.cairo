@@ -5,7 +5,7 @@ trait IReferral {
     #[view]
     fn owner() -> starknet::ContractAddress;
     #[external]
-    fn claim(amount: u256);
+    fn claim();
     #[external]
     fn add_commission(amount: u256, sponsor_addr: starknet::ContractAddress);
     #[external]
@@ -13,7 +13,9 @@ trait IReferral {
     #[external]
     fn upgrade(impl_hash: starknet::class_hash::ClassHash);
     #[external]
-    fn upgrade_and_call(new_hash: starknet::class_hash::ClassHash, selector: felt252, calldata: Array<felt252>);
+    fn upgrade_and_call(
+        new_hash: starknet::class_hash::ClassHash, selector: felt252, calldata: Array<felt252>
+    );
 }
 
 #[contract]
@@ -28,7 +30,7 @@ mod Referral {
     use referral::upgrades::upgradeable::Upgradeable;
 
     // dispatchers
-    use referral::token::erc20::{ IERC20Dispatcher, IERC20DispatcherTrait };
+    use referral::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 
     struct Storage {
         sponsor_balance: LegacyMap::<ContractAddress, u256>,
@@ -47,7 +49,9 @@ mod Referral {
     fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress, ) {}
 
     #[event]
-    fn on_commission(timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress, ) {}
+    fn on_commission(
+        timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress, 
+    ) {}
 
 
     //
@@ -56,10 +60,10 @@ mod Referral {
 
     #[constructor]
     fn constructor(
-        admin: ContractAddress, 
+        admin: ContractAddress,
         naming_addr: ContractAddress,
         eth_addr: ContractAddress,
-        min_claim_amount: u256, 
+        min_claim_amount: u256,
         share: u256
     ) {
         initializer(:admin);
@@ -68,7 +72,7 @@ mod Referral {
         min_claim::write(min_claim_amount);
         default_comm::write(share);
     }
-    
+
     //
     // View
     //
@@ -83,19 +87,15 @@ mod Referral {
     //
 
     #[external]
-    fn claim(amount: u256) {
-        assert(amount >= min_claim::read(), 'Amount is too low');
-        let sponsor_addr = get_caller_address();
+    fn claim() {
         let balance = sponsor_balance::read(sponsor_addr);
-        assert(balance >= amount, 'Amount greater than balance');
-
+        assert(balance >= min_claim::read(), 'Balance is too low');
+        let sponsor_addr = get_caller_address();
         let contract_addr = get_contract_address();
         let ERC20 = IERC20Dispatcher { contract_address: eth_contract::read() };
-        ERC20.approve(spender: contract_addr, amount: amount);
-        ERC20.transferFrom(sender: contract_addr, recipient: sponsor_addr, amount: amount);
-        sponsor_balance::write(sponsor_addr, balance - amount);
-
-        on_claim(get_block_timestamp(), amount, sponsor_addr);
+        ERC20.transfer(recipient: sponsor_addr, amount: balance);
+        sponsor_balance::write(sponsor_addr, 0);
+        on_claim(get_block_timestamp(), balance, sponsor_addr);
     }
 
     #[external]
@@ -118,7 +118,9 @@ mod Referral {
         // warning: make sure to check for overflow
         let comm = (amount.low * share.low) / 100_u128;
 
-        sponsor_balance::write(sponsor_addr, sponsor_balance::read(sponsor_addr) + u256 { low: comm, high: 0 });
+        sponsor_balance::write(
+            sponsor_addr, sponsor_balance::read(sponsor_addr) + u256 { low: comm, high: 0 }
+        );
         on_commission(get_block_timestamp(), u256 { low: comm, high: 0 }, sponsor_addr, caller);
     }
 
@@ -197,5 +199,4 @@ mod Referral {
         }
         true
     }
-
 }
