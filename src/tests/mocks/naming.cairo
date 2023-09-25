@@ -28,7 +28,7 @@ mod Naming {
   #[external]
   fn buy_domain(amount: u256, sponsor_addr: starknet::ContractAddress) -> bool {
     let Referral = IReferralDispatcher { contract_address: referral_contract::read() };
-    Referral.add_commission(amount, sponsor_addr);
+    Referral.add_commission(amount, sponsor_addr, starknet::get_caller_address());
     true
   }
 }

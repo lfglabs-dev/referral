@@ -144,9 +144,9 @@ fn test_add_commission_fail_not_naming_contract() {
     let naming = deploy_naming();
     setup(naming.contract_address, erc20.contract_address, u256  { low: 1, high: 0 }, share:  u256 { low: 10, high: 0 });
 
-    // It should test buying a domain from the naming contract add add the right commission
+    // It should test buying a domain from another contract
     testing::set_caller_address(USER());
-    Referral::add_commission(u256 { low: 100, high: 0 }, USER());
+    Referral::add_commission(u256 { low: 100, high: 0 }, USER(),  USER());
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn test_add_commission() {
 
     // It should test calling add_commission from the naming contract & add the right commission
     testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
+    Referral::add_commission(price_domain, OTHER(), USER());
 
     let balance = Referral::get_balance(OTHER());
     assert(balance == (price_domain * default_comm) / u256 { low: 100, high: 0 }, 'Balance is incorrect');
@@ -190,7 +190,7 @@ fn test_add_custom_commission() {
 
     // It should test calling add_commission from the naming contract & add the right commission
     testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
+    Referral::add_commission(price_domain, OTHER(), USER());
 
     let balance = Referral::get_balance(OTHER());
     assert(balance == (price_domain * custom_comm) / (u256 { low: 100, high: 0 }), 'Balance is incorrect');
@@ -298,7 +298,7 @@ fn test_claim() {
     erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 1000, high: 0 });
 
     testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
+    Referral::add_commission(price_domain, OTHER(), USER());
     let balance = Referral::get_balance(OTHER());
     assert(balance == (price_domain * default_comm) / u256 { low: 100, high: 0 }, 'Error adding commission');
 
@@ -325,7 +325,7 @@ fn test_claim_fail_contract_balance_too_low() {
     erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 10, high: 0 });
 
     testing::set_caller_address(naming.contract_address);
-    Referral::add_commission(price_domain, OTHER());
+    Referral::add_commission(price_domain, OTHER(), USER());
 
     // It should test claiming the commission with an amount higher than the balance of the referral contract
     testing::set_caller_address(OTHER());

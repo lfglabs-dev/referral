@@ -46,11 +46,14 @@ mod Referral {
     //
 
     #[event]
-    fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress, ) {}
+    fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress,) {}
 
     #[event]
     fn on_commission(
-        timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress, 
+        timestamp: u64,
+        amount: u256,
+        sponsor_addr: ContractAddress,
+        sponsored_addr: ContractAddress,
     ) {}
 
 
@@ -99,7 +102,9 @@ mod Referral {
     }
 
     #[external]
-    fn add_commission(amount: u256, sponsor_addr: ContractAddress) {
+    fn add_commission(
+        amount: u256, sponsor_addr: ContractAddress, sponsored_addr: ContractAddress
+    ) {
         let caller = get_caller_address();
         assert(caller == naming_contract::read(), 'Caller not naming contract');
 
@@ -121,7 +126,9 @@ mod Referral {
         sponsor_balance::write(
             sponsor_addr, sponsor_balance::read(sponsor_addr) + u256 { low: comm, high: 0 }
         );
-        on_commission(get_block_timestamp(), u256 { low: comm, high: 0 }, sponsor_addr, caller);
+        on_commission(
+            get_block_timestamp(), u256 { low: comm, high: 0 }, sponsor_addr, sponsored_addr
+        );
     }
 
 
