@@ -1,11 +1,11 @@
 [package]
 name = "referral"
-version = "0.1.0"
+version = "0.2.0"
 
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest
 
 [dependencies]
-starknet = "1.1.0"
+starknet = "2.2.0"
 
 [[target.starknet-contract]]
 # Enable Sierra codegen.
@@ -16,5 +16,3 @@ casm = true
 
 # Emit Python-powered hints in order to run compiled CASM class with legacy Cairo VM.
 casm-add-pythonic-hints = true
-
-allowed-libfuncs-list.name = "experimental_v0.1.0"
