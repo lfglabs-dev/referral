@@ -7,7 +7,7 @@ use starknet::ContractAddress;
 
 use referral::referral::{Referral, IReferralDispatcher, IReferralDispatcherTrait};
 
-use super::constants::{OWNER, ZERO, OTHER, USER, REFERRAL_ADDR};
+use super::constants::{OWNER, ZERO, OTHER, USER, REFERRAL_ADDR, USER_A, USER_B, USER_C};
 use super::utils;
 use super::mocks::erc20::{ERC20, IERC20Dispatcher, IERC20DispatcherTrait};
 use super::mocks::naming::{Naming, INamingDispatcher, INamingDispatcherTrait};
@@ -323,4 +323,71 @@ fn test_upgrade_fail_from_zero() {
 
     // It should test upgrading implementation from the zero address
     referral.upgrade(V2_CLASS_HASH());
+}
+
+#[test]
+#[available_gas(20000000)]
+fn test_add_rec_commission() {
+    let default_comm = 10;
+    let price_domain = 1000;
+
+    let (erc20, naming, referral) = setup(1, default_comm);
+
+    testing::set_contract_address(OWNER());
+
+    // It sends ETH to referral contract and then withdraw this amount from the contract
+    let initial_balance = 10000;
+    erc20.transfer_from(OWNER(), USER_A(), initial_balance);
+    erc20.transfer_from(OWNER(), USER_B(), initial_balance);
+    erc20.transfer_from(OWNER(), USER_C(), initial_balance);
+
+    // It should test calling add_commission from the naming contract & add the right commission
+    testing::set_contract_address(naming.contract_address);
+    assert(referral.get_balance(USER_A()) == 0, 'Init balance is incorrect');
+
+    // B referred by C
+    referral.add_commission(price_domain, USER_C(), USER_B());
+    let initial_expected = (price_domain * default_comm) / 100;
+    assert(referral.get_balance(USER_B()) == 0, 'Balance of B is incorrect');
+    assert(referral.get_balance(USER_C()) == initial_expected, 'Balance of C is incorrect');
+
+    // A referred by B
+    referral.add_commission(price_domain, USER_B(), USER_A());
+
+    assert(referral.get_balance(USER_A()) == 0, 'Balance of A is incorrect');
+    assert(referral.get_balance(USER_B()) == initial_expected, 'Balance of B is incorrect');
+    assert(
+        referral.get_balance(USER_C()) == initial_expected + initial_expected / 2,
+        'Balance of C is incorrect'
+    );
+}
+
+
+#[test]
+#[available_gas(20000000)]
+fn test_add_rec_circular_commission() {
+    // The goal of this test is to ensure that if a circular commission is created,
+    // people can still buy domains and will receive a reward only once
+
+    let default_comm = 10;
+    let price_domain = 1000;
+
+    let (erc20, naming, referral) = setup(1, default_comm);
+
+    testing::set_contract_address(OWNER());
+
+    // It sends ETH to referral contract and then withdraw this amount from the contract
+    let initial_balance = 10000;
+    erc20.transfer_from(OWNER(), USER_A(), initial_balance);
+    erc20.transfer_from(OWNER(), USER_B(), initial_balance);
+    erc20.transfer_from(OWNER(), USER_C(), initial_balance);
+
+    testing::set_contract_address(naming.contract_address);
+
+    // B referred by C
+    referral.add_commission(price_domain, USER_C(), USER_B());
+    // A referred by B
+    referral.add_commission(price_domain, USER_B(), USER_A());
+    // C referred by A
+    referral.add_commission(price_domain, USER_A(), USER_C());
 }

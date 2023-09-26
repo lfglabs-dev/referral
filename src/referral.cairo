@@ -27,6 +27,7 @@ trait IReferral<TContractState> {
 
 #[starknet::contract]
 mod Referral {
+    use core::dict::Felt252DictTrait;
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
     use starknet::contract_address::ContractAddressZeroable;
@@ -125,9 +126,13 @@ mod Referral {
             assert(caller == self.naming_contract.read(), 'Caller not naming contract');
             // we update the sponsor of "sponsored" so if sponsored refers someone, sponsor
             // will also receive something recursively
-            self.sponsored_by.write(sponsor_addr, sponsored_addr);
+            self.sponsored_by.write(sponsored_addr, sponsor_addr);
+
+            let mut circular_lock: Felt252Dict<bool> = Default::default();
             // 1 is the initial accumulator value (denominator factor)
-            self.rec_distribution(sponsored_addr, sponsor_addr, amount, 1);
+            self.rec_distribution(sponsored_addr, sponsor_addr, amount, ref circular_lock, 1);
+            // to protect against malicious prover
+            circular_lock.squash();
         }
 
 
@@ -218,11 +223,14 @@ mod Referral {
             sponsored_addr: ContractAddress,
             sponsor_addr: ContractAddress,
             base_amount: u256,
+            ref circular_lock: Felt252Dict<bool>,
             acc: u256,
         ) {
-            if sponsor_addr == ContractAddressZeroable::zero() {
+            if circular_lock.get(sponsor_addr.into())
+                || sponsor_addr == ContractAddressZeroable::zero() {
                 return;
             }
+            circular_lock.insert(sponsor_addr.into(), true);
 
             let custom_comm = self.sponsor_comm.read(sponsor_addr);
             let share = match integer::u256_is_zero(custom_comm) {
@@ -240,7 +248,11 @@ mod Referral {
 
             self
                 .rec_distribution(
-                    sponsored_addr, self.sponsored_by.read(sponsor_addr), base_amount, 2 * acc
+                    sponsored_addr,
+                    self.sponsored_by.read(sponsor_addr),
+                    base_amount,
+                    ref circular_lock,
+                    2 * acc
                 );
         }
 
