@@ -123,6 +123,9 @@ mod Referral {
         ) {
             let caller = get_caller_address();
             assert(caller == self.naming_contract.read(), 'Caller not naming contract');
+            // we update the sponsor of "sponsored" so if sponsored refers someone, sponsor
+            // will also receive something recursively
+            self.sponsored_by.write(sponsor_addr, sponsored_addr);
             // 1 is the initial accumulator value (denominator factor)
             self.rec_distribution(sponsored_addr, sponsor_addr, amount, 1);
         }
