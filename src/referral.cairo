@@ -29,7 +29,9 @@ trait IReferral<TContractState> {
 mod Referral {
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
+    use starknet::contract_address::ContractAddressZeroable;
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
+    use integer::{u256_safe_divmod};
     use debug::PrintTrait;
     use super::IReferral;
     use referral::access::ownable::Ownable;
@@ -42,6 +44,7 @@ mod Referral {
     struct Storage {
         sponsor_balance: LegacyMap<ContractAddress, u256>,
         sponsor_comm: LegacyMap<ContractAddress, u256>,
+        sponsored_by: LegacyMap<ContractAddress, ContractAddress>,
         default_comm: u256,
         min_claim: u256,
         naming_contract: ContractAddress,
@@ -120,31 +123,8 @@ mod Referral {
         ) {
             let caller = get_caller_address();
             assert(caller == self.naming_contract.read(), 'Caller not naming contract');
-
-            // Calculate commission
-            let mut share = self.sponsor_comm.read(sponsor_addr);
-            if share == 0 {
-                share = self.default_comm.read();
-            }
-            // u256_is_zero is not accepted yet
-            // let share = match integer::u256_is_zero(sponsor_comm::read(sponsor_addr)) {
-            //     zeroable::IsZeroResult::Zero(()) => default_comm::read(),
-            //     zeroable::IsZeroResult::NonZero(x) => sponsor_comm::read(sponsor_addr),
-            // };
-
-            // todo: update to use u256_safe_divmod when we can
-            // warning: make sure to check for overflow
-            let comm = (amount.low * share.low) / 100_u128;
-
-            self
-                .sponsor_balance
-                .write(
-                    sponsor_addr,
-                    self.sponsor_balance.read(sponsor_addr) + u256 { low: comm, high: 0 }
-                );
-            on_commission(
-                get_block_timestamp(), u256 { low: comm, high: 0 }, sponsor_addr, sponsored_addr
-            );
+            // 1 is the initial accumulator value (denominator factor)
+            self.rec_distribution(sponsored_addr, sponsor_addr, amount, 1);
         }
 
 
@@ -230,6 +210,37 @@ mod Referral {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn rec_distribution(
+            ref self: ContractState,
+            sponsored_addr: ContractAddress,
+            sponsor_addr: ContractAddress,
+            base_amount: u256,
+            acc: u256,
+        ) {
+            if sponsor_addr == ContractAddressZeroable::zero() {
+                return;
+            }
+
+            let custom_comm = self.sponsor_comm.read(sponsor_addr);
+            let share = match integer::u256_is_zero(custom_comm) {
+                zeroable::IsZeroResult::Zero(()) => self.default_comm.read(),
+                zeroable::IsZeroResult::NonZero(x) => custom_comm,
+            };
+
+            // takes share% of base_amount and divides by acc
+            let comm = (base_amount * share) / (100 * acc);
+
+            self
+                .sponsor_balance
+                .write(sponsor_addr, self.sponsor_balance.read(sponsor_addr) + comm);
+            on_commission(get_block_timestamp(), comm, sponsor_addr, sponsored_addr);
+
+            self
+                .rec_distribution(
+                    sponsored_addr, self.sponsored_by.read(sponsor_addr), base_amount, 2 * acc
+                );
+        }
+
         fn check_share_size(self: @ContractState, share: u256) -> bool {
             if share > 100 {
                 return false;
