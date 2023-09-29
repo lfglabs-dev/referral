@@ -128,7 +128,7 @@ mod Referral {
             // will also receive something recursively
             self.sponsored_by.write(sponsored_addr, sponsor_addr);
 
-            let mut circular_lock: Felt252Dict<bool> = Default::default();
+            let mut circular_lock: Felt252Dict<felt252> = Default::default();
             // 1 is the initial accumulator value (denominator factor)
             self.rec_distribution(sponsored_addr, sponsor_addr, amount, ref circular_lock, 1);
             // to protect against malicious prover
@@ -223,14 +223,14 @@ mod Referral {
             sponsored_addr: ContractAddress,
             sponsor_addr: ContractAddress,
             base_amount: u256,
-            ref circular_lock: Felt252Dict<bool>,
+            ref circular_lock: Felt252Dict<felt252>,
             acc: u256,
         ) {
-            if circular_lock.get(sponsor_addr.into())
-                || sponsor_addr == ContractAddressZeroable::zero() {
+            // if we checked one or there is no sponsor
+            if (1 - circular_lock.get(sponsor_addr.into())) * sponsor_addr.into() == 0 {
                 return;
             }
-            circular_lock.insert(sponsor_addr.into(), true);
+            circular_lock.insert(sponsor_addr.into(), true.into());
 
             let custom_comm = self.sponsor_comm.read(sponsor_addr);
             let share = match integer::u256_is_zero(custom_comm) {
