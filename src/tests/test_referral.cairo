@@ -194,7 +194,6 @@ fn test_withdraw() {
 
     let (erc20, naming, referral) = setup(1, default_comm);
 
-    //testing::set_caller_address(OWNER());
     testing::set_contract_address(OWNER());
 
     // It sends ETH to referral contract and then withdraw this amount from the contract
