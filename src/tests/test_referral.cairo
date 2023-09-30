@@ -33,13 +33,10 @@ fn setup(
 }
 
 fn deploy_erc20(recipient: ContractAddress, initial_supply: u256) -> IERC20Dispatcher {
-    let mut calldata = ArrayTrait::<felt252>::new();
-
-    calldata.append(initial_supply.low.into());
-    calldata.append(initial_supply.high.into());
-    calldata.append(recipient.into());
-
-    let address = utils::deploy(ERC20::TEST_CLASS_HASH, calldata);
+    let address = utils::deploy(
+        ERC20::TEST_CLASS_HASH,
+        array![initial_supply.low.into(), initial_supply.high.into(), recipient.into()]
+    );
     IERC20Dispatcher { contract_address: address }
 }
 
@@ -55,17 +52,18 @@ fn deploy_referral(
     min_claim_amount: u256,
     share: u256
 ) -> IReferralDispatcher {
-    let mut calldata = ArrayTrait::<felt252>::new();
-
-    calldata.append(admin.into());
-    calldata.append(naming_addr.into());
-    calldata.append(eth_addr.into());
-    calldata.append(min_claim_amount.low.into());
-    calldata.append(min_claim_amount.high.into());
-    calldata.append(share.low.into());
-    calldata.append(share.high.into());
-
-    let address = utils::deploy(Referral::TEST_CLASS_HASH, calldata);
+    let address = utils::deploy(
+        Referral::TEST_CLASS_HASH,
+        array![
+            admin.into(),
+            naming_addr.into(),
+            eth_addr.into(),
+            min_claim_amount.low.into(),
+            min_claim_amount.high.into(),
+            share.low.into(),
+            share.high.into()
+        ]
+    );
     IReferralDispatcher { contract_address: address }
 }
 
