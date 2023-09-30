@@ -237,7 +237,7 @@ fn test_withdraw_fail_zero_addr() {
     let contract_balance = erc20.balance_of(REFERRAL_ADDR());
     assert(contract_balance == 100000, 'Contract balance is not 100000');
 
-    testing::set_caller_address(ZERO());
+    testing::set_contract_address(ZERO());
     referral.withdraw(OTHER(), 100000);
 }
 
