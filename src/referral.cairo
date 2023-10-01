@@ -58,16 +58,29 @@ mod Referral {
 
     #[event]
     #[derive(Drop, starknet::Event)]
-    fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress,) {}
+    enum Event {
+        OnClaim: OnClaim,
+        OnCommission: OnCommission,
+    }
 
-    #[event]
+
     #[derive(Drop, starknet::Event)]
-    fn on_commission(
+    struct OnClaim {
         timestamp: u64,
         amount: u256,
+        #[key]
+        sponsor_addr: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct OnCommission {
+        timestamp: u64,
+        amount: u256,
+        #[key]
         sponsor_addr: ContractAddress,
+        #[key]
         sponsored_addr: ContractAddress,
-    ) {}
+    }
 
 
     //
@@ -113,7 +126,12 @@ mod Referral {
             let ERC20 = IERC20Dispatcher { contract_address: self.eth_contract.read() };
             ERC20.transfer(recipient: sponsor_addr, amount: balance);
             self.sponsor_balance.write(sponsor_addr, 0);
-            on_claim(get_block_timestamp(), balance, sponsor_addr);
+            self
+                .emit(
+                    Event::OnClaim(
+                        OnClaim { timestamp: get_block_timestamp(), amount: balance, sponsor_addr, }
+                    )
+                );
         }
 
         fn add_commission(
@@ -244,7 +262,18 @@ mod Referral {
             self
                 .sponsor_balance
                 .write(sponsor_addr, self.sponsor_balance.read(sponsor_addr) + comm);
-            on_commission(get_block_timestamp(), comm, sponsor_addr, sponsored_addr);
+
+            self
+                .emit(
+                    Event::OnCommission(
+                        OnCommission {
+                            timestamp: get_block_timestamp(),
+                            amount: comm,
+                            sponsor_addr,
+                            sponsored_addr
+                        }
+                    )
+                );
 
             self
                 .rec_distribution(

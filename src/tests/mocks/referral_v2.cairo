@@ -41,10 +41,10 @@ mod Referral_V2 {
     //
 
     #[event]
-    fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress,) {}
+    fn OnClaim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress,) {}
 
     #[event]
-    fn on_commission(
+    fn OnCommission(
         timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress,
     ) {}
 
