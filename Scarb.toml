@@ -5,6 +5,8 @@ version = "0.2.0"
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest
 
 [dependencies]
+identity = { git = "https://github.com/starknet-id/identity.git", branch = "master" }
+naming = { git = "https://github.com/starknet-id/naming.git", branch = "master" }
 starknet = "2.2.0"
 
 [[target.starknet-contract]]

@@ -33,7 +33,6 @@ mod Referral {
     use starknet::contract_address::ContractAddressZeroable;
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
     use integer::u256_safe_divmod;
-    use debug::PrintTrait;
     use super::IReferral;
     use referral::access::ownable::Ownable;
     use referral::upgrades::upgradeable::Upgradeable;

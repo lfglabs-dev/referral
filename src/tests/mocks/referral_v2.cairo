@@ -17,8 +17,6 @@ mod Referral_V2 {
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
-
-    use debug::PrintTrait;
     use super::IReferral_V2;
     use referral::access::ownable::Ownable;
     use referral::upgrades::upgradeable::Upgradeable;

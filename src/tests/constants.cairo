@@ -15,7 +15,7 @@ fn ZERO() -> starknet::ContractAddress {
 }
 
 fn REFERRAL_ADDR() -> starknet::ContractAddress {
-    starknet::contract_address_const::<3>()
+    starknet::contract_address_const::<5>()
 }
 
 

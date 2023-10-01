@@ -1,16 +1,17 @@
 use array::ArrayTrait;
 use traits::{Into, TryInto};
 use option::OptionTrait;
-use debug::PrintTrait;
 use starknet::testing;
 use starknet::ContractAddress;
-
 use referral::referral::{Referral, IReferralDispatcher, IReferralDispatcherTrait};
-
 use super::constants::{OWNER, ZERO, OTHER, USER, REFERRAL_ADDR, USER_A, USER_B, USER_C};
 use super::utils;
 use super::mocks::erc20::{ERC20, IERC20Dispatcher, IERC20DispatcherTrait};
-use super::mocks::naming::{Naming, INamingDispatcher, INamingDispatcherTrait};
+use identity::{identity::main::Identity};
+use naming::{
+    pricing::Pricing, naming::main::Naming,
+    interface::naming::{INaming, INamingDispatcher, INamingDispatcherTrait}
+};
 use super::mocks::referral_v2::{Referral_V2, IReferral_V2Dispatcher, IReferral_V2DispatcherTrait};
 use referral::upgrades::upgradeable::Upgradeable;
 
@@ -22,7 +23,17 @@ fn setup(
     min_claim_amount: u256, share: u256
 ) -> (IERC20Dispatcher, INamingDispatcher, IReferralDispatcher) {
     let erc20 = deploy_erc20(recipient: OWNER(), initial_supply: 100000);
-    let naming = deploy_naming();
+    // pricing
+    let pricing = utils::deploy(Pricing::TEST_CLASS_HASH, array![erc20.contract_address.into()]);
+    // identity
+    let identity = utils::deploy(Identity::TEST_CLASS_HASH, ArrayTrait::<felt252>::new());
+    // naming
+    let naming = INamingDispatcher {
+        contract_address: utils::deploy(
+            Naming::TEST_CLASS_HASH, array![identity.into(), pricing.into(), 0, 0]
+        )
+    };
+
     // It should initialize the referral contract
 
     let referral = deploy_referral(
@@ -113,7 +124,7 @@ fn test_set_default_commission_failed_wrong_share_size() {
 
     // It should test setting up default commission higher than 100%
     testing::set_contract_address(OWNER());
-    referral.set_default_commission(u256 { low: 1000, high: 0 });
+    referral.set_default_commission(1000);
 }
 
 #[test]
@@ -124,7 +135,7 @@ fn test_override_commission_wrong_share_size() {
 
     // It should test overriding the default commission with a share higher than 100%
     testing::set_contract_address(OWNER());
-    referral.override_commission(OTHER(), u256 { low: 1000, high: 0 });
+    referral.override_commission(OTHER(), 1000);
 }
 
 #[test]
@@ -135,7 +146,7 @@ fn test_add_commission_fail_not_naming_contract() {
 
     // It should test buying a domain from another contract
     testing::set_caller_address(USER());
-    referral.add_commission(u256 { low: 100, high: 0 }, USER(), USER());
+    referral.add_commission(100, USER(), USER());
 }
 
 #[test]
@@ -178,10 +189,7 @@ fn test_add_custom_commission() {
     referral.add_commission(price_domain, OTHER(), USER());
 
     let balance = referral.get_balance(OTHER());
-    assert(
-        balance == (price_domain * custom_comm) / (u256 { low: 100, high: 0 }),
-        'Balance is incorrect'
-    );
+    assert(balance == (price_domain * custom_comm) / (100), 'Balance is incorrect');
 }
 
 #[test]
@@ -251,7 +259,7 @@ fn test_withdraw_fail_balance_too_low() {
 
     testing::set_contract_address(OWNER());
     // It sends ETH to referral contract and then try withrawing a higher amount from the contract balance
-    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 100, high: 0 });
+    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), 100);
     referral.withdraw(OTHER(), 100000);
 }
 
@@ -262,15 +270,11 @@ fn test_claim() {
     let price_domain = 1000;
     let (erc20, naming, referral) = setup(1, default_comm);
     testing::set_contract_address(OWNER());
-    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), u256 { low: 1000, high: 0 });
-
+    erc20.transfer_from(OWNER(), REFERRAL_ADDR(), 1000);
     testing::set_contract_address(naming.contract_address);
     referral.add_commission(price_domain, OTHER(), USER());
     let balance = referral.get_balance(OTHER());
-    assert(
-        balance == (price_domain * default_comm) / u256 { low: 100, high: 0 },
-        'Error adding commission'
-    );
+    assert(balance == (price_domain * default_comm) / 100, 'Error adding commission');
 
     // It should test claiming the commission
     testing::set_contract_address(OTHER());
