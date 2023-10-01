@@ -387,4 +387,19 @@ fn test_add_rec_circular_commission() {
     referral.add_commission(price_domain, USER_B(), USER_A());
     // C referred by A
     referral.add_commission(price_domain, USER_A(), USER_C());
+
+    let initial_expected = (price_domain * default_comm) / 100;
+    assert(
+        referral.get_balance(USER_C()) == initial_expected
+            + initial_expected / 2
+            + initial_expected / 4,
+        'Balance of C is incorrect'
+    );
+
+    assert(
+        referral.get_balance(USER_B()) == initial_expected + initial_expected / 2,
+        'Balance of B is incorrect'
+    );
+
+    assert(referral.get_balance(USER_A()) == initial_expected, 'Balance of B is incorrect');
 }
