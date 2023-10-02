@@ -1,121 +1,141 @@
-#[abi]
-trait IERC20 {
-  #[view]
-  fn balance_of(account: starknet::ContractAddress) -> u256;
+#[starknet::interface]
+trait IERC20<TContractState> {
+    fn balance_of(self: @TContractState, account: starknet::ContractAddress) -> u256;
 
-  #[external]
-  fn transfer_from(sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) -> bool;
+    fn transfer_from(
+        ref self: TContractState,
+        sender: starknet::ContractAddress,
+        recipient: starknet::ContractAddress,
+        amount: u256
+    ) -> bool;
 
-  #[external]
-  fn transfer(recipient: starknet::ContractAddress, amount: u256) -> bool;
+    fn transferFrom(
+        ref self: TContractState,
+        sender: starknet::ContractAddress,
+        recipient: starknet::ContractAddress,
+        amount: u256
+    ) -> bool;
 
-  #[external]
-  fn approve(spender: starknet::ContractAddress, amount: u256) -> bool;
+    fn transfer(
+        ref self: TContractState, recipient: starknet::ContractAddress, amount: u256
+    ) -> bool;
+
+    fn approve(ref self: TContractState, spender: starknet::ContractAddress, amount: u256) -> bool;
 }
 
-#[contract]
+#[starknet::contract]
 mod ERC20 {
-  use super::IERC20;
-  use zeroable::Zeroable;
+    use super::IERC20;
+    use zeroable::Zeroable;
 
-  //
-  // Storage
-  //
+    //
+    // Storage
+    //
 
-  struct Storage {
-    _balances: LegacyMap<starknet::ContractAddress, u256>,
-    _allowances: LegacyMap<(starknet::ContractAddress, starknet::ContractAddress), u256>,
-  }
-
-  #[event]
-  fn Approval(owner: starknet::ContractAddress, spender: starknet::ContractAddress, value: u256) {}
-
-  //
-  // Constructor
-  //
-
-  #[constructor]
-  fn constructor(initial_supply: u256, recipient: starknet::ContractAddress) {
-    _mint(recipient, initial_supply);
-  }
-
-  //
-  // Interface impl
-  //
-
-  impl ERC20 of IERC20 {
-    fn balance_of(account: starknet::ContractAddress) -> u256 {
-      _balances::read(account)
+    #[storage]
+    struct Storage {
+        _balances: LegacyMap<starknet::ContractAddress, u256>,
+        _allowances: LegacyMap<(starknet::ContractAddress, starknet::ContractAddress), u256>,
     }
 
-    fn transfer_from(sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) -> bool {
-      _transfer(sender, recipient, amount);
-      true
+    #[event]
+    fn Approval(
+        owner: starknet::ContractAddress, spender: starknet::ContractAddress, value: u256
+    ) {}
+
+    //
+    // Constructor
+    //
+
+    #[constructor]
+    fn constructor(
+        ref self: ContractState, initial_supply: u256, recipient: starknet::ContractAddress
+    ) {
+        self._mint(recipient, initial_supply);
     }
 
-    fn transfer(recipient: starknet::ContractAddress, amount: u256) -> bool {
-        let sender = starknet::get_caller_address();
-        _transfer(sender, recipient, amount);
-        true
+
+    //
+    // Interface impl
+    //
+    #[external(v0)]
+    impl ERC20 of IERC20<ContractState> {
+        fn balance_of(self: @ContractState, account: starknet::ContractAddress) -> u256 {
+            self._balances.read(account)
+        }
+
+        fn transfer_from(
+            ref self: ContractState,
+            sender: starknet::ContractAddress,
+            recipient: starknet::ContractAddress,
+            amount: u256
+        ) -> bool {
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+        fn transferFrom(
+            ref self: ContractState,
+            sender: starknet::ContractAddress,
+            recipient: starknet::ContractAddress,
+            amount: u256
+        ) -> bool {
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+
+        fn transfer(
+            ref self: ContractState, recipient: starknet::ContractAddress, amount: u256
+        ) -> bool {
+            let sender = starknet::get_caller_address();
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+        fn approve(
+            ref self: ContractState, spender: starknet::ContractAddress, amount: u256
+        ) -> bool {
+            let caller = starknet::get_caller_address();
+            self._approve(caller, spender, amount);
+            true
+        }
     }
 
-    fn approve(spender: starknet::ContractAddress, amount: u256) -> bool {
-        let caller = starknet::get_caller_address();
-        _approve(caller, spender, amount);
-        true
+    //
+    // Internals
+    //
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn _mint(ref self: ContractState, recipient: starknet::ContractAddress, amount: u256) {
+            assert(!recipient.is_zero(), 'ERC20: mint to 0');
+
+            self._balances.write(recipient, self._balances.read(recipient) + amount);
+        }
+
+        fn _transfer(
+            ref self: ContractState,
+            sender: starknet::ContractAddress,
+            recipient: starknet::ContractAddress,
+            amount: u256
+        ) {
+            assert(!sender.is_zero(), 'ERC20: transfer from 0');
+            assert(!recipient.is_zero(), 'ERC20: transfer to 0');
+
+            self._balances.write(sender, self._balances.read(sender) - amount);
+            self._balances.write(recipient, self._balances.read(recipient) + amount);
+        }
+
+        fn _approve(
+            ref self: ContractState,
+            owner: starknet::ContractAddress,
+            spender: starknet::ContractAddress,
+            amount: u256
+        ) {
+            assert(!owner.is_zero(), 'ERC20: approve from 0');
+            assert(!spender.is_zero(), 'ERC20: approve to 0');
+            self._allowances.write((owner, spender), amount);
+            Approval(owner, spender, amount);
+        }
     }
-  }
-
-  #[view]
-  fn balance_of(account: starknet::ContractAddress) -> u256 {
-    ERC20::balance_of(account)
-  }
-
-  #[external]
-  fn transfer_from(sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) -> bool {
-    ERC20::transfer_from(sender, recipient, amount)
-  }
-
-  #[external]
-  fn transferFrom(sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) -> bool {
-    ERC20::transfer_from(sender, recipient, amount)
-  }
-
-  #[external]
-  fn transfer(recipient: starknet::ContractAddress, amount: u256) -> bool {
-      ERC20::transfer(recipient, amount)
-  }
-
-  #[external]
-  fn approve(spender: starknet::ContractAddress, amount: u256) -> bool {
-    ERC20::approve(spender, amount)
-  }
-
-  //
-  // Internals
-  //
-
-  #[internal]
-  fn _mint(recipient: starknet::ContractAddress, amount: u256) {
-    assert(!recipient.is_zero(), 'ERC20: mint to 0');
-
-    _balances::write(recipient, _balances::read(recipient) + amount);
-  }
-
-  #[internal]
-  fn _transfer(sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) {
-    assert(!sender.is_zero(), 'ERC20: transfer from 0');
-    assert(!recipient.is_zero(), 'ERC20: transfer to 0');
-
-    _balances::write(sender, _balances::read(sender) - amount);
-    _balances::write(recipient, _balances::read(recipient) + amount);
-  }
-
-  #[internal]
-  fn _approve(owner: starknet::ContractAddress, spender: starknet::ContractAddress, amount: u256) {
-      assert(!owner.is_zero(), 'ERC20: approve from 0');
-      assert(!spender.is_zero(), 'ERC20: approve to 0');
-      _allowances::write((owner, spender), amount);
-      Approval(owner, spender, amount);
-  }
 }

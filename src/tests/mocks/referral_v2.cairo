@@ -1,36 +1,33 @@
-#[abi]
-trait IReferral_V2 {
-    #[view]
-    fn get_balance(sponsor_addr: starknet::ContractAddress) -> u256;
-    #[view]
-    fn owner() -> starknet::ContractAddress;
-    #[external]
-    fn claim(amount: u256);
-    #[external]
-    fn add_commission(amount: u256, sponsor_addr: starknet::ContractAddress);
-    #[external]
-    fn withdraw(addr: starknet::ContractAddress, amount: u256);
-    #[view]
-    fn a_new_function() -> bool;
+use starknet::{ClassHash, ContractAddress};
+
+#[starknet::interface]
+trait IReferral_V2<TContractState> {
+    fn get_balance(self: @TContractState, sponsor_addr: starknet::ContractAddress) -> u256;
+    fn owner(self: @TContractState) -> starknet::ContractAddress;
+    fn a_new_function(self: @TContractState) -> bool;
+    fn transfer_ownership(ref self: TContractState, new_admin: ContractAddress);
+
+    fn upgrade(
+        ref self: TContractState, impl_hash: ClassHash, selector: felt252, calldata: Array<felt252>
+    );
 }
 
-#[contract]
+#[starknet::contract]
 mod Referral_V2 {
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
-
-    use debug::PrintTrait;
-
+    use super::IReferral_V2;
     use referral::access::ownable::Ownable;
     use referral::upgrades::upgradeable::Upgradeable;
 
     // dispatchers
-    use referral::token::erc20::{ IERC20Dispatcher, IERC20DispatcherTrait };
+    use referral::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 
+    #[storage]
     struct Storage {
-        sponsor_balance: LegacyMap::<ContractAddress, u256>,
-        sponsor_comm: LegacyMap::<ContractAddress, u256>, 
+        sponsor_balance: LegacyMap<ContractAddress, u256>,
+        sponsor_comm: LegacyMap<ContractAddress, u256>,
         default_comm: u256,
         min_claim: u256,
         naming_contract: ContractAddress,
@@ -42,10 +39,12 @@ mod Referral_V2 {
     //
 
     #[event]
-    fn on_claim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress, ) {}
+    fn OnClaim(timestamp: u64, amount: u256, sponsor_addr: ContractAddress,) {}
 
     #[event]
-    fn on_commission(timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress, ) {}
+    fn OnCommission(
+        timestamp: u64, amount: u256, sponsor_addr: ContractAddress, caller: ContractAddress,
+    ) {}
 
 
     //
@@ -54,68 +53,73 @@ mod Referral_V2 {
 
     #[constructor]
     fn constructor(
-        admin: ContractAddress, 
+        ref self: ContractState,
+        admin: ContractAddress,
         naming_addr: ContractAddress,
         eth_addr: ContractAddress,
-        min_claim_amount: u256, 
+        min_claim_amount: u256,
         share: u256
     ) {
-        initializer(:admin);
-        naming_contract::write(naming_addr);
-        eth_contract::write(eth_addr);
-        min_claim::write(min_claim_amount);
-        default_comm::write(share);
-    }
-    
-    //
-    // View
-    //
-    #[view]
-    fn a_new_function() -> bool {
-        true
+        let mut ownable_state = Ownable::unsafe_new_contract_state();
+        Ownable::InternalTrait::_transfer_ownership(ref ownable_state, admin);
+        self.naming_contract.write(naming_addr);
+        self.eth_contract.write(eth_addr);
+        self.min_claim.write(min_claim_amount);
+        self.default_comm.write(share);
     }
 
+    #[external(v0)]
+    impl Referral_V2Impl of IReferral_V2<ContractState> {
+        //
+        // View
+        //
+        fn a_new_function(self: @ContractState) -> bool {
+            true
+        }
+
+        fn get_balance(self: @ContractState, sponsor_addr: ContractAddress) -> u256 {
+            self.sponsor_balance.read(sponsor_addr)
+        }
+
+        //
+        // Ownership 
+        //
+
+        fn owner(self: @ContractState) -> ContractAddress {
+            let ownable_state = Ownable::unsafe_new_contract_state();
+            Ownable::InternalTrait::owner(@ownable_state)
+        }
 
 
-    #[view]
-    fn get_balance(sponsor_addr: ContractAddress) -> u256 {
-        sponsor_balance::read(sponsor_addr)
+        fn transfer_ownership(ref self: ContractState, new_admin: ContractAddress) {
+            let mut ownable_state = Ownable::unsafe_new_contract_state();
+            Ownable::InternalTrait::transfer_ownership(ref ownable_state, new_admin);
+        }
+
+        fn upgrade(
+            ref self: ContractState,
+            impl_hash: ClassHash,
+            selector: felt252,
+            calldata: Array<felt252>
+        ) {
+            let ownable_state = Ownable::unsafe_new_contract_state();
+            Ownable::InternalTrait::assert_only_owner(@ownable_state);
+            let mut upgradeable_state = Upgradeable::unsafe_new_contract_state();
+            Upgradeable::InternalTrait::upgrade(ref upgradeable_state, impl_hash);
+        }
     }
 
-    //
-    // Ownership 
-    //
-
-    #[view]
-    fn owner() -> ContractAddress {
-        Ownable::owner()
-    }
-
-    #[internal]
-    fn initializer(admin: ContractAddress) {
-        Ownable::_transfer_ownership(new_owner: admin);
-    }
-
-    #[external]
-    fn transfer_ownership(new_admin: ContractAddress) {
-        Ownable::transfer_ownership(new_admin);
-    }
-
-    #[external]
-    fn upgrade(impl_hash: ClassHash, selector: felt252, calldata: Array<felt252>) {
-        Ownable::assert_only_owner();
-        Upgradeable::upgrade(impl_hash);
-    }
 
     //
     // Internals
     //
-
-    fn check_share_size(share: u256) -> bool {
-        if share > (u256 { low: 100, high: 0 }) {
-            return false;
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn check_share_size(share: u256) -> bool {
+            if share > (u256 { low: 100, high: 0 }) {
+                return false;
+            }
+            true
         }
-        true
     }
-
 }
