@@ -23,8 +23,8 @@ from utils.constants import (
     # CONTRACTS,
     DEPLOYMENTS_DIR,
     ETH_TOKEN_ADDRESS,
-    NETWORK,
-    GATEWAY_CLIENT,
+    VARS,
+    FULL_NODE_CLIENT,
     # SOURCE_DIR,
 )
 
@@ -44,13 +44,13 @@ async def get_starknet_account(
     address=None,
     private_key=None,
 ) -> Account:
-    address = address or NETWORK["account_address"]
+    address = address or VARS["account_address"]
     if address is None:
         raise ValueError(
             "address was not given in arg nor in env variable, see README.md#Deploy"
         )
     address = int(address, 16)
-    private_key = private_key or NETWORK["private_key"]
+    private_key = private_key or VARS["private_key"]
     if private_key is None:
         raise ValueError(
             "private_key was not given in arg nor in env variable, see README.md#Deploy"
@@ -59,8 +59,8 @@ async def get_starknet_account(
 
     return Account(
         address=address,
-        client=GATEWAY_CLIENT,
-        chain=NETWORK["chain_id"],
+        client=FULL_NODE_CLIENT,
+        chain=VARS["chain_id"],
         key_pair=key_pair,
     )
 
@@ -79,6 +79,7 @@ async def get_contract(contract_name) -> Contract:
         json.loads(get_artifact(contract_name).read_text())["abi"],
         await get_starknet_account(),
     )
+
 
 def dump_declarations(declarations):
     json.dump(
@@ -125,23 +126,29 @@ def get_alias(contract_name):
 
 
 def get_tx_url(tx_hash: int) -> str:
-    return f"{NETWORK['explorer_url']}/tx/0x{tx_hash:064x}"
+    return f"{VARS['explorer_url']}/tx/0x{tx_hash:064x}"
+
 
 def get_sierra_artifact(contract_name):
     return BUILD_DIR / f"{contract_name}.sierra.json"
 
+
 def get_casm_artifact(contract_name):
     return BUILD_DIR / f"{contract_name}.casm.json"
+
 
 def get_abi(contract_name):
     sierra_artifact = get_sierra_artifact(contract_name)
     contract_compiled_sierra = Path(sierra_artifact).read_text()
-    return create_sierra_compiled_contract(compiled_contract = contract_compiled_sierra).abi
+    return create_sierra_compiled_contract(
+        compiled_contract=contract_compiled_sierra
+    ).abi
+
 
 async def declare_v2(contract_name):
     logger.info(f"ℹ️  Declaring {contract_name}")
 
-     # contract_compiled_casm is a string containing the content of the starknet-sierra-compile (.casm file)
+    # contract_compiled_casm is a string containing the content of the starknet-sierra-compile (.casm file)
     casm_artifact = get_casm_artifact(contract_name)
     contract_compiled_casm = Path(casm_artifact).read_text()
     casm_class = create_casm_class(contract_compiled_casm)
@@ -151,10 +158,10 @@ async def declare_v2(contract_name):
     sierra_artifact = get_sierra_artifact(contract_name)
     contract_compiled_sierra = Path(sierra_artifact).read_text()
     sierra_class = create_sierra_compiled_contract(contract_compiled_sierra)
-    sierra_class_hash= compute_sierra_class_hash(sierra_class)
+    sierra_class_hash = compute_sierra_class_hash(sierra_class)
     # Check has not been declared before
     try:
-        await GATEWAY_CLIENT.get_class_by_hash(class_hash=sierra_class_hash)
+        await FULL_NODE_CLIENT.get_class_by_hash(class_hash=sierra_class_hash)
         logger.info(f"✅ Class already declared, skipping")
         return sierra_class_hash
     except Exception:
@@ -175,6 +182,7 @@ async def declare_v2(contract_name):
     logger.info(f"✅ {contract_name} class hash: {hex(resp.class_hash)}")
     return resp.class_hash
 
+
 async def deploy_v2(contract_name, *args):
     logger.info(f"ℹ️  Deploying {contract_name}")
 
@@ -182,19 +190,16 @@ async def deploy_v2(contract_name, *args):
 
     sierra_class_hash = get_declarations()[contract_name]
     abi = get_abi(contract_name)
-    
+    print("toto")
     deploy_result = await Contract.deploy_contract(
         account=account,
         class_hash=sierra_class_hash,
         abi=json.loads(abi),
         constructor_args=list(args),
-        cairo_version=1,
         max_fee=int(1e17),
     )
-
+    print(deploy_result)
     await deploy_result.wait_for_acceptance()
-    print("deploy_result", deploy_result)
-
     logger.info(
         f"✅ {contract_name} deployed at: {hex(deploy_result.deployed_contract.address)}"
     )
@@ -209,9 +214,11 @@ async def invoke(contract_name, function_name, inputs, address=None):
     account = await get_starknet_account()
     deployments = get_deployments()
     call = Call(
-        to_addr=int(deployments[contract_name]["address"], 16) if address is None else address, 
-        selector=get_selector_from_name(function_name), 
-        calldata=inputs
+        to_addr=int(deployments[contract_name]["address"], 16)
+        if address is None
+        else address,
+        selector=get_selector_from_name(function_name),
+        calldata=inputs,
     )
     print("call", call)
     logger.info(f"ℹ️  Invoking {contract_name}.{function_name}({json.dumps(inputs)})")
@@ -222,6 +229,7 @@ async def invoke(contract_name, function_name, inputs, address=None):
         hex(response.transaction_hash),
     )
     return response.transaction_hash
+
 
 async def invoke_cairo0(contract_name, function_name, *inputs, address=None):
     account = await get_starknet_account()
