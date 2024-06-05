@@ -149,12 +149,7 @@ mod Referral {
 
         fn claim(ref self: ContractState, erc20_addr: ContractAddress) {
             let sponsor_addr = get_caller_address();
-            let balance = if erc20_addr == self.eth_contract.read() {
-                self.sponsor_balance.read(sponsor_addr)
-                    + self.new_sponsor_balance.read((sponsor_addr, erc20_addr))
-            } else {
-                self.new_sponsor_balance.read((sponsor_addr, erc20_addr))
-            };
+            let balance = self.get_balance(sponsor_addr, erc20_addr);
             assert(balance >= self.min_claim.read(), 'Balance is too low');
             let ERC20 = IERC20CamelDispatcher { contract_address: erc20_addr };
             ERC20.transfer(recipient: sponsor_addr, amount: balance);
