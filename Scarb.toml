@@ -5,9 +5,11 @@ version = "0.2.0"
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest
 
 [dependencies]
-identity = { git = "https://github.com/starknet-id/identity.git", branch = "master" }
-naming = { git = "https://github.com/starknet-id/naming.git", branch = "master" }
-starknet = "2.2.0"
+starknet = "2.6.3"
+identity = { git = "https://github.com/starknet-id/identity.git", rev = "5ae7fafdd20abf4b1e789b83af5db7e23ad39a7c" }
+naming = { git = "https://github.com/starknet-id/naming.git", rev = "02d547b02aca918a51e3cdd9635989ac0af4cedf"}
+openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", rev = "0697004db74502ce49900edef37331dd03531356" }
+storage_read = { git = "https://github.com/starknet-id/storage_read_component.git", rev = "6440184cc078188d1efeab1283d1698738cde435" }
 
 [[target.starknet-contract]]
 # Enable Sierra codegen.

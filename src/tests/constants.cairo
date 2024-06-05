@@ -1,9 +1,9 @@
 fn OWNER() -> starknet::ContractAddress {
-    starknet::contract_address_const::<10>()
+    starknet::contract_address_const::<0x123>()
 }
 
 fn OTHER() -> starknet::ContractAddress {
-    starknet::contract_address_const::<20>()
+    starknet::contract_address_const::<0x456>()
 }
 
 fn USER() -> starknet::ContractAddress {
@@ -13,11 +13,6 @@ fn USER() -> starknet::ContractAddress {
 fn ZERO() -> starknet::ContractAddress {
     Zeroable::zero()
 }
-
-fn REFERRAL_ADDR() -> starknet::ContractAddress {
-    starknet::contract_address_const::<5>()
-}
-
 
 fn USER_A() -> starknet::ContractAddress {
     starknet::contract_address_const::<500>()
