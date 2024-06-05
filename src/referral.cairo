@@ -3,8 +3,6 @@ use starknet::ContractAddress;
 #[starknet::interface]
 trait IReferral<TContractState> {
     fn get_balance(self: @TContractState, sponsor_addr: ContractAddress) -> u256;
-    fn owner(self: @TContractState) -> ContractAddress;
-    fn transfer_ownership(ref self: TContractState, new_admin: ContractAddress);
     fn claim(ref self: TContractState);
     fn add_commission(
         ref self: TContractState,
@@ -16,13 +14,6 @@ trait IReferral<TContractState> {
     fn set_min_claim(ref self: TContractState, amount: u256);
     fn set_default_commission(ref self: TContractState, share: u256);
     fn override_commission(ref self: TContractState, sponsor_addr: ContractAddress, share: u256);
-    fn upgrade(ref self: TContractState, impl_hash: starknet::class_hash::ClassHash);
-    fn upgrade_and_call(
-        ref self: TContractState,
-        new_hash: starknet::class_hash::ClassHash,
-        selector: felt252,
-        calldata: Array<felt252>
-    );
 }
 
 #[starknet::contract]
@@ -34,11 +25,24 @@ mod Referral {
     use starknet::{get_caller_address, get_contract_address, get_block_timestamp};
     use integer::u256_safe_divmod;
     use super::IReferral;
-    use referral::access::ownable::Ownable;
-    use referral::upgrades::upgradeable::Upgradeable;
 
-    // dispatchers
-    use referral::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::{
+        account, access::ownable::OwnableComponent,
+        upgrades::{UpgradeableComponent, interface::IUpgradeable},
+        token::erc20::interface::{IERC20Camel, IERC20CamelDispatcher, IERC20CamelDispatcherTrait},
+    };
+    use storage_read::{main::storage_read_component, interface::IStorageRead};
+
+    component!(path: storage_read_component, storage: storage_read, event: StorageReadEvent);
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+
+    #[abi(embed_v0)]
+    impl StorageReadImpl = storage_read_component::StorageRead<ContractState>;
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -49,6 +53,12 @@ mod Referral {
         min_claim: u256,
         naming_contract: ContractAddress,
         eth_contract: ContractAddress,
+        #[substorage(v0)]
+        storage_read: storage_read_component::Storage,
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage
     }
 
     //
@@ -60,6 +70,12 @@ mod Referral {
     enum Event {
         OnClaim: OnClaim,
         OnCommission: OnCommission,
+        #[flat]
+        StorageReadEvent: storage_read_component::Event,
+        #[flat]
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event
     }
 
 
@@ -95,15 +111,14 @@ mod Referral {
         min_claim_amount: u256,
         share: u256
     ) {
-        let mut ownable_state = Ownable::unsafe_new_contract_state();
-        Ownable::InternalTrait::_transfer_ownership(ref ownable_state, admin);
+        self.ownable.initializer(admin);
         self.naming_contract.write(naming_addr);
         self.eth_contract.write(eth_addr);
         self.min_claim.write(min_claim_amount);
         self.default_comm.write(share);
     }
 
-    #[external(v0)]
+    #[abi(embed_v0)]
     impl ReferralImpl of IReferral<ContractState> {
         //
         // View
@@ -121,8 +136,7 @@ mod Referral {
             let sponsor_addr = get_caller_address();
             let balance = self.sponsor_balance.read(sponsor_addr);
             assert(balance >= self.min_claim.read(), 'Balance is too low');
-            let contract_addr = get_contract_address();
-            let ERC20 = IERC20Dispatcher { contract_address: self.eth_contract.read() };
+            let ERC20 = IERC20CamelDispatcher { contract_address: self.eth_contract.read() };
             ERC20.transfer(recipient: sponsor_addr, amount: balance);
             self.sponsor_balance.write(sponsor_addr, 0);
             self
@@ -158,14 +172,12 @@ mod Referral {
         //
 
         fn set_min_claim(ref self: ContractState, amount: u256) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
+            self.ownable.assert_only_owner();
             self.min_claim.write(amount);
         }
 
         fn set_default_commission(ref self: ContractState, share: u256) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
+            self.ownable.assert_only_owner();
             assert(self.check_share_size(share), 'Share must be between 0 and 100');
             self.default_comm.write(share);
         }
@@ -174,57 +186,25 @@ mod Referral {
         fn override_commission(
             ref self: ContractState, sponsor_addr: ContractAddress, share: u256
         ) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
+            self.ownable.assert_only_owner();
             assert(self.check_share_size(share), 'Share must be between 0 and 100');
             self.sponsor_comm.write(sponsor_addr, share);
         }
 
         fn withdraw(ref self: ContractState, addr: ContractAddress, amount: u256) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
+            self.ownable.assert_only_owner();
             let contract_addr = get_contract_address();
-            let ERC20 = IERC20Dispatcher { contract_address: self.eth_contract.read() };
+            let ERC20 = IERC20CamelDispatcher { contract_address: self.eth_contract.read() };
             ERC20.approve(spender: contract_addr, amount: amount);
             ERC20.transferFrom(sender: contract_addr, recipient: addr, amount: amount);
         }
+    }
 
-
-        //
-        // Ownership 
-        //
-
-        fn owner(self: @ContractState) -> ContractAddress {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::owner(@ownable_state)
-        }
-
-
-        fn transfer_ownership(ref self: ContractState, new_admin: ContractAddress) {
-            let mut ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::transfer_ownership(ref ownable_state, new_admin);
-        }
-
-        fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
-
-            let mut upgradeable_state = Upgradeable::unsafe_new_contract_state();
-            Upgradeable::InternalTrait::upgrade(ref upgradeable_state, impl_hash);
-        }
-
-        fn upgrade_and_call(
-            ref self: ContractState,
-            new_hash: ClassHash,
-            selector: felt252,
-            calldata: Array<felt252>
-        ) {
-            let ownable_state = Ownable::unsafe_new_contract_state();
-            Ownable::InternalTrait::assert_only_owner(@ownable_state);
-            let mut upgradeable_state = Upgradeable::unsafe_new_contract_state();
-            Upgradeable::InternalTrait::upgrade_and_call(
-                ref upgradeable_state, new_hash, selector, calldata
-            );
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable._upgrade(new_class_hash);
         }
     }
 
@@ -252,7 +232,7 @@ mod Referral {
             let custom_comm = self.sponsor_comm.read(sponsor_addr);
             let share = match integer::u256_is_zero(custom_comm) {
                 zeroable::IsZeroResult::Zero(()) => self.default_comm.read(),
-                zeroable::IsZeroResult::NonZero(x) => custom_comm,
+                zeroable::IsZeroResult::NonZero(_x) => custom_comm,
             };
 
             // takes share% of base_amount and divides by acc
