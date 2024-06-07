@@ -2,15 +2,20 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 trait IReferral<TContractState> {
-    fn get_balance(self: @TContractState, sponsor_addr: ContractAddress) -> u256;
-    fn claim(ref self: TContractState);
+    fn get_balance(
+        self: @TContractState, sponsor_addr: ContractAddress, erc20_addr: ContractAddress
+    ) -> u256;
+    fn claim(ref self: TContractState, erc20_addr: ContractAddress);
     fn add_commission(
         ref self: TContractState,
         amount: u256,
         sponsor_addr: ContractAddress,
-        sponsored_addr: ContractAddress
+        sponsored_addr: ContractAddress,
+        erc20_addr: ContractAddress,
     );
-    fn withdraw(ref self: TContractState, addr: ContractAddress, amount: u256);
+    fn withdraw(
+        ref self: TContractState, addr: ContractAddress, amount: u256, erc20_addr: ContractAddress
+    );
     fn set_min_claim(ref self: TContractState, amount: u256);
     fn set_default_commission(ref self: TContractState, share: u256);
     fn override_commission(ref self: TContractState, sponsor_addr: ContractAddress, share: u256);
@@ -47,6 +52,7 @@ mod Referral {
     #[storage]
     struct Storage {
         sponsor_balance: LegacyMap<ContractAddress, u256>,
+        new_sponsor_balance: LegacyMap<(ContractAddress, ContractAddress), u256>,
         sponsor_comm: LegacyMap<ContractAddress, u256>,
         sponsored_by: LegacyMap<ContractAddress, ContractAddress>,
         default_comm: u256,
@@ -84,7 +90,9 @@ mod Referral {
         timestamp: u64,
         amount: u256,
         #[key]
-        sponsor_addr: ContractAddress
+        sponsor_addr: ContractAddress,
+        #[key]
+        erc20_addr: ContractAddress
     }
 
     #[derive(Drop, starknet::Event)]
@@ -95,6 +103,8 @@ mod Referral {
         sponsor_addr: ContractAddress,
         #[key]
         sponsored_addr: ContractAddress,
+        #[key]
+        erc20_addr: ContractAddress
     }
 
 
@@ -123,26 +133,39 @@ mod Referral {
         //
         // View
         //
-        fn get_balance(self: @ContractState, sponsor_addr: ContractAddress) -> u256 {
-            self.sponsor_balance.read(sponsor_addr)
+        fn get_balance(
+            self: @ContractState, sponsor_addr: ContractAddress, erc20_addr: ContractAddress
+        ) -> u256 {
+            if erc20_addr == self.eth_contract.read() {
+                return self.sponsor_balance.read(sponsor_addr)
+                    + self.new_sponsor_balance.read((sponsor_addr, erc20_addr));
+            }
+            self.new_sponsor_balance.read((sponsor_addr, erc20_addr))
         }
-
 
         //
         // External
         //
 
-        fn claim(ref self: ContractState,) {
+        fn claim(ref self: ContractState, erc20_addr: ContractAddress) {
             let sponsor_addr = get_caller_address();
-            let balance = self.sponsor_balance.read(sponsor_addr);
+            let balance = self.get_balance(sponsor_addr, erc20_addr);
             assert(balance >= self.min_claim.read(), 'Balance is too low');
-            let ERC20 = IERC20CamelDispatcher { contract_address: self.eth_contract.read() };
+            let ERC20 = IERC20CamelDispatcher { contract_address: erc20_addr };
             ERC20.transfer(recipient: sponsor_addr, amount: balance);
-            self.sponsor_balance.write(sponsor_addr, 0);
+            self.new_sponsor_balance.write((sponsor_addr, erc20_addr), 0);
+            if erc20_addr == self.eth_contract.read() {
+                self.sponsor_balance.write(sponsor_addr, 0);
+            }
             self
                 .emit(
                     Event::OnClaim(
-                        OnClaim { timestamp: get_block_timestamp(), amount: balance, sponsor_addr, }
+                        OnClaim {
+                            timestamp: get_block_timestamp(),
+                            amount: balance,
+                            sponsor_addr,
+                            erc20_addr
+                        }
                     )
                 );
         }
@@ -151,7 +174,8 @@ mod Referral {
             ref self: ContractState,
             amount: u256,
             sponsor_addr: ContractAddress,
-            sponsored_addr: ContractAddress
+            sponsored_addr: ContractAddress,
+            erc20_addr: ContractAddress,
         ) {
             let caller = get_caller_address();
             assert(caller == self.naming_contract.read(), 'Caller not naming contract');
@@ -161,7 +185,10 @@ mod Referral {
 
             let mut circular_lock: Felt252Dict<felt252> = Default::default();
             // 1 is the initial accumulator value (denominator factor)
-            self.rec_distribution(sponsored_addr, sponsor_addr, amount, ref circular_lock, 1);
+            self
+                .rec_distribution(
+                    sponsored_addr, sponsor_addr, amount, ref circular_lock, 1, erc20_addr
+                );
             // to protect against malicious prover
             circular_lock.squash();
         }
@@ -191,10 +218,15 @@ mod Referral {
             self.sponsor_comm.write(sponsor_addr, share);
         }
 
-        fn withdraw(ref self: ContractState, addr: ContractAddress, amount: u256) {
+        fn withdraw(
+            ref self: ContractState,
+            addr: ContractAddress,
+            amount: u256,
+            erc20_addr: ContractAddress
+        ) {
             self.ownable.assert_only_owner();
             let contract_addr = get_contract_address();
-            let ERC20 = IERC20CamelDispatcher { contract_address: self.eth_contract.read() };
+            let ERC20 = IERC20CamelDispatcher { contract_address: erc20_addr };
             ERC20.approve(spender: contract_addr, amount: amount);
             ERC20.transferFrom(sender: contract_addr, recipient: addr, amount: amount);
         }
@@ -222,6 +254,7 @@ mod Referral {
             base_amount: u256,
             ref circular_lock: Felt252Dict<felt252>,
             acc: u256,
+            erc20_addr: ContractAddress,
         ) {
             // if we checked one or there is no sponsor
             if (1 - circular_lock.get(sponsor_addr.into())) * sponsor_addr.into() == 0 {
@@ -239,8 +272,11 @@ mod Referral {
             let comm = (base_amount * share) / (100 * acc);
 
             self
-                .sponsor_balance
-                .write(sponsor_addr, self.sponsor_balance.read(sponsor_addr) + comm);
+                .new_sponsor_balance
+                .write(
+                    (sponsor_addr, erc20_addr),
+                    self.new_sponsor_balance.read((sponsor_addr, erc20_addr)) + comm
+                );
 
             self
                 .emit(
@@ -249,7 +285,8 @@ mod Referral {
                             timestamp: get_block_timestamp(),
                             amount: comm,
                             sponsor_addr,
-                            sponsored_addr
+                            sponsored_addr,
+                            erc20_addr
                         }
                     )
                 );
@@ -260,7 +297,8 @@ mod Referral {
                     self.sponsored_by.read(sponsor_addr),
                     base_amount,
                     ref circular_lock,
-                    2 * acc
+                    2 * acc,
+                    erc20_addr
                 );
         }
 

@@ -133,11 +133,11 @@ fn test_override_commission_wrong_share_size() {
 #[available_gas(20000000)]
 #[should_panic(expected: ('Caller not naming contract', 'ENTRYPOINT_FAILED'))]
 fn test_add_commission_fail_not_naming_contract() {
-    let (_, _, referral) = setup(1, 10);
+    let (erc20, _, referral) = setup(1, 10);
 
     // It should test buying a domain from another contract
     set_contract_address(USER());
-    referral.add_commission(100, USER(), USER());
+    referral.add_commission(100, USER(), USER(), erc20.contract_address);
 }
 
 #[test]
@@ -146,16 +146,16 @@ fn test_add_commission() {
     let default_comm = 10;
     let price_domain = 1000;
 
-    let (_, naming, referral) = setup(1, default_comm);
+    let (erc20, naming, referral) = setup(1, default_comm);
 
-    let balance = referral.get_balance(OTHER());
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == u256 { low: 0, high: 0 }, 'Balance is not 0');
 
     // It should test calling add_commission from the naming contract & add the right commission
     set_contract_address(naming.contract_address);
-    referral.add_commission(price_domain, OTHER(), USER());
+    referral.add_commission(price_domain, OTHER(), USER(), erc20.contract_address);
 
-    let balance = referral.get_balance(OTHER());
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == (price_domain * default_comm) / 100, 'Balance is incorrect');
 }
 
@@ -166,9 +166,9 @@ fn test_add_custom_commission() {
     let price_domain = 1000;
     let custom_comm = 20;
 
-    let (_, naming, referral) = setup(1, default_comm);
+    let (erc20, naming, referral) = setup(1, default_comm);
 
-    let balance = referral.get_balance(OTHER());
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == u256 { low: 0, high: 0 }, 'Balance is not 0');
 
     // It should define override the default commission for OTHER() user to 20%
@@ -177,9 +177,9 @@ fn test_add_custom_commission() {
 
     // It should test calling add_commission from the naming contract & add the right commission
     set_contract_address(naming.contract_address);
-    referral.add_commission(price_domain, OTHER(), USER());
+    referral.add_commission(price_domain, OTHER(), USER(), erc20.contract_address);
 
-    let balance = referral.get_balance(OTHER());
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == (price_domain * custom_comm) / (100), 'Balance is incorrect');
 }
 
@@ -195,7 +195,7 @@ fn test_withdraw() {
     erc20.transfer(referral.contract_address, 100000);
     let contract_balance = erc20.balanceOf(referral.contract_address);
     assert(contract_balance == 100000, 'Contract balance is not 100000');
-    referral.withdraw(OWNER(), 100000);
+    referral.withdraw(OWNER(), 100000, erc20.contract_address);
     let contract_balance = erc20.balanceOf(referral.contract_address);
     assert(contract_balance == 0, 'Contract balance is not 0');
 }
@@ -214,7 +214,7 @@ fn test_withdraw_fail_not_owner() {
     assert(contract_balance == 100000, 'Contract balance is not 100000');
 
     set_contract_address(OTHER());
-    referral.withdraw(OTHER(), 100000);
+    referral.withdraw(OTHER(), 100000, erc20.contract_address);
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn test_withdraw_fail_zero_addr() {
     assert(contract_balance == 100000, 'Contract balance is not 100000');
 
     set_contract_address(ZERO());
-    referral.withdraw(OTHER(), 100000);
+    referral.withdraw(OTHER(), 100000, erc20.contract_address);
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn test_withdraw_fail_balance_too_low() {
     set_contract_address(OWNER());
     // It sends ETH to referral contract and then try withrawing a higher amount from the contract balance
     erc20.transfer(referral.contract_address, 100);
-    referral.withdraw(OTHER(), 100000);
+    referral.withdraw(OTHER(), 100000, erc20.contract_address);
 }
 
 #[test]
@@ -258,14 +258,14 @@ fn test_claim() {
     erc20.transfer(referral.contract_address, 1000);
 
     set_contract_address(naming.contract_address);
-    referral.add_commission(price_domain, OTHER(), USER());
-    let balance = referral.get_balance(OTHER());
+    referral.add_commission(price_domain, OTHER(), USER(), erc20.contract_address);
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == (price_domain * default_comm) / 100, 'Error adding commission');
 
     // It should test claiming the commission
     set_contract_address(OTHER());
-    referral.claim();
-    let balance = referral.get_balance(OTHER());
+    referral.claim(erc20.contract_address);
+    let balance = referral.get_balance(OTHER(), erc20.contract_address);
     assert(balance == 0, 'Claiming commissions failed');
 }
 
@@ -280,11 +280,11 @@ fn test_claim_fail_contract_balance_too_low() {
     erc20.transfer(referral.contract_address, u256 { low: 10, high: 0 });
 
     set_contract_address(naming.contract_address);
-    referral.add_commission(price_domain, OTHER(), USER());
+    referral.add_commission(price_domain, OTHER(), USER(), erc20.contract_address);
 
     // It should test claiming the commission with an amount higher than the balance of the referral contract
     set_contract_address(OTHER());
-    referral.claim();
+    referral.claim(erc20.contract_address);
 }
 
 #[test]
@@ -305,21 +305,34 @@ fn test_add_rec_commission() {
 
     // It should test calling add_commission from the naming contract & add the right commission
     set_contract_address(naming.contract_address);
-    assert(referral.get_balance(USER_A()) == 0, 'Init balance is incorrect');
+    assert(
+        referral.get_balance(USER_A(), erc20.contract_address) == 0, 'Init balance is incorrect'
+    );
 
     // B referred by C
-    referral.add_commission(price_domain, USER_C(), USER_B());
+    referral.add_commission(price_domain, USER_C(), USER_B(), erc20.contract_address);
     let initial_expected = (price_domain * default_comm) / 100;
-    assert(referral.get_balance(USER_B()) == 0, 'Balance of B is incorrect');
-    assert(referral.get_balance(USER_C()) == initial_expected, 'Balance of C is incorrect');
+    assert(
+        referral.get_balance(USER_B(), erc20.contract_address) == 0, 'Balance of B is incorrect'
+    );
+    assert(
+        referral.get_balance(USER_C(), erc20.contract_address) == initial_expected,
+        'Balance of C is incorrect'
+    );
 
     // A referred by B
-    referral.add_commission(price_domain, USER_B(), USER_A());
+    referral.add_commission(price_domain, USER_B(), USER_A(), erc20.contract_address);
 
-    assert(referral.get_balance(USER_A()) == 0, 'Balance of A is incorrect');
-    assert(referral.get_balance(USER_B()) == initial_expected, 'Balance of B is incorrect');
     assert(
-        referral.get_balance(USER_C()) == initial_expected + initial_expected / 2,
+        referral.get_balance(USER_A(), erc20.contract_address) == 0, 'Balance of A is incorrect'
+    );
+    assert(
+        referral.get_balance(USER_B(), erc20.contract_address) == initial_expected,
+        'Balance of B is incorrect'
+    );
+    assert(
+        referral.get_balance(USER_C(), erc20.contract_address) == initial_expected
+            + initial_expected / 2,
         'Balance of C is incorrect'
     );
 }
@@ -347,24 +360,28 @@ fn test_add_rec_circular_commission() {
     set_contract_address(naming.contract_address);
 
     // B referred by C
-    referral.add_commission(price_domain, USER_C(), USER_B());
+    referral.add_commission(price_domain, USER_C(), USER_B(), erc20.contract_address);
     // A referred by B
-    referral.add_commission(price_domain, USER_B(), USER_A());
+    referral.add_commission(price_domain, USER_B(), USER_A(), erc20.contract_address);
     // C referred by A
-    referral.add_commission(price_domain, USER_A(), USER_C());
+    referral.add_commission(price_domain, USER_A(), USER_C(), erc20.contract_address);
 
     let initial_expected = (price_domain * default_comm) / 100;
     assert(
-        referral.get_balance(USER_C()) == initial_expected
+        referral.get_balance(USER_C(), erc20.contract_address) == initial_expected
             + initial_expected / 2
             + initial_expected / 4,
         'Balance of C is incorrect'
     );
 
     assert(
-        referral.get_balance(USER_B()) == initial_expected + initial_expected / 2,
+        referral.get_balance(USER_B(), erc20.contract_address) == initial_expected
+            + initial_expected / 2,
         'Balance of B is incorrect'
     );
 
-    assert(referral.get_balance(USER_A()) == initial_expected, 'Balance of B is incorrect');
+    assert(
+        referral.get_balance(USER_A(), erc20.contract_address) == initial_expected,
+        'Balance of B is incorrect'
+    );
 }
